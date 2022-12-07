@@ -1,0 +1,301 @@
+---
+title: "Projet final - Version finale"
+output: html_notebook
+---
+#Dowloading important packages
+```{r}
+install.packages("neuralnet")
+install.packages("caret")
+install.packages("Rcpp")
+install.packages("devtools")
+devtools::install_github("rstudio/tensorflow")
+devtools::install_github("rstudio/keras")
+devtools::install_github("bips-hb/neuralnet")
+library(neuralnet)
+library(dplyr)
+library(magrittr)
+library(caret)
+library(keras)
+library(tensorflow)
+install_tensorflow()
+```
+#Open the csv-type database in R
+```{r}
+library(readr)
+data_csv <- read_csv("ASD FP/data_csv.csv")
+stringsAsFactors=FALSE
+```
+#Looking for duplicates in the dataset
+```{r}
+duplicated(data_csv)
+options(max.print = 9999999)
+```
+#Finding missing data
+```{r}
+which(is.na(data_csv$`CASE_NO_PATIENT'S`))
+which(is.na(data_csv$A1))
+which(is.na(data_csv$A2))
+which(is.na(data_csv$A3))
+which(is.na(data_csv$A4))
+which(is.na(data_csv$A5))
+which(is.na(data_csv$A6))
+which(is.na(data_csv$A7))
+which(is.na(data_csv$A8))
+which(is.na(data_csv$A9))
+which(is.na(data_csv$A10_Autism_Spectrum_Quotient))
+which(is.na(data_csv$Social_Responsiveness_Scale))
+which(is.na(data_csv$Age_Years))
+which(is.na(data_csv$Qchat_10_Score))
+which(is.na(data_csv$`Speech Delay/Language Disorder`))
+which(is.na(data_csv$`Learning disorder`))
+which(is.na(data_csv$Genetic_Disorders))
+which(is.na(data_csv$Depression))
+which(is.na(data_csv$`Global developmental delay/intellectual disability`))
+which(is.na(data_csv$`Social/Behavioural Issues`))
+which(is.na(data_csv$`Childhood Autism Rating Scale`))
+which(is.na(data_csv$Anxiety_disorder))
+which(is.na(data_csv$Sex))
+which(is.na(data_csv$Ethnicity))
+which(is.na(data_csv$Jaundice))
+which(is.na(data_csv$Family_mem_with_ASD))
+which(is.na(data_csv$Who_completed_the_test))
+which(is.na(data_csv$ASD_traits))
+```
+#Finding the mode for the missing data 
+```{r}
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+v <- data_csv$Social_Responsiveness_Scale
+result <- getmode(v)
+print(result)
+
+v1 <- data_csv$Qchat_10_Score
+result <- getmode(v1)
+print(result)
+
+v2 <- data_csv$Depression
+result <- getmode(v2)
+print(result)
+
+v3 <- data_csv$`Social/Behavioural Issues`
+result <-getmode(v3)
+print(result)
+```
+#Finding the mean for missing data 
+```{r}
+result.mean <- mean(data_csv$Social_Responsiveness_Scale, na.rm = TRUE)
+print(result.mean)
+
+result.mean <- mean(data_csv$Qchat_10_Score, na.rm = TRUE)
+print(result.mean)
+```
+#Distribution of Social responsivess scale 
+```{r}
+n = 1000
+Y = data_csv$Social_Responsiveness_Scale
+y = sample(Y, n, replace = TRUE)
+x = runif(n)
+plot(y,x)
+```
+#Distribution of Qchat-10 score
+```{r}
+n=1000
+Y1 = data_csv$Qchat_10_Score
+y1 = sample(Y1, n, replace = TRUE)
+x1 = runif(n)
+plot(y1,x1)
+```
+#Substituting NA values for YES in depression and social/behavioral issues 
+```{r}
+data_csv$Depression[is.na(data_csv$Depression)] <- "Yes" 
+
+data_csv$`Social/Behavioural Issues`[is.na(data_csv$`Social/Behavioural Issues`)] <- "Yes"
+```
+#Substituting NA values for the mean in Social Responsiveness scale
+```{r}
+data_csv$Social_Responsiveness_Scale[is.na(data_csv$Social_Responsiveness_Scale)] <- 3 
+```
+#Substituting NA values for the mode in Qchat 10 score 
+```{r}
+data_csv$Qchat_10_Score[is.na(data_csv$Qchat_10_Score)] <- 6
+```
+#Creating new dataset with desired variables
+#Combining the Autism Spectrum Quotien score (A1 + A2 ...+A10) = ASQ
+#Deleating unwanted variables for our model #1
+```{r}
+ds <- data_csv[,-1]
+rowSums(ds[, c(1:10)], na.rm = TRUE)
+ds$ASQ <- rowSums(ds[ , c(1:10)], na.rm=TRUE)
+ds <- ds[,-(1:10)]
+ds <- ds[,-1]
+ds <- ds[, -(5:10)]
+ds <- ds[, -(9:10)]
+ds <- ds[,-3]
+ds <- ds[,-2]
+ds <- ds[,-5]
+View(ds)
+```
+#Transforming categorical data into numeric data 
+```{r}
+ds$`Learning disorder`[ds$`Learning disorder`=="Yes"] <- 1
+ds$`Learning disorder`[ds$`Learning disorder`=="No"] <- 0
+
+ds$Sex[ds$Sex =="M"] <- 1
+ds$Sex[ds$Sex=="F"] <- 0
+
+ds$Family_mem_with_ASD[ds$Family_mem_with_ASD =="Yes"] <- 1
+ds$Family_mem_with_ASD[ds$Family_mem_with_ASD=="No"] <- 0
+
+ds$Ethnicity[ds$Ethnicity == "Asian"] <- 1
+ds$Ethnicity[ds$Ethnicity == "asian"] <- 1
+ds$Ethnicity[ds$Ethnicity == "Black"] <- 2
+ds$Ethnicity[ds$Ethnicity == "black"] <- 2
+ds$Ethnicity[ds$Ethnicity == "Hispanic"] <- 3
+ds$Ethnicity[ds$Ethnicity == "latino"] <- 3
+ds$Ethnicity[ds$Ethnicity == "Latino"] <- 3
+ds$Ethnicity[ds$Ethnicity == "Middle Eastern"] <- 4
+ds$Ethnicity[ds$Ethnicity == "middle eastern"] <- 4
+ds$Ethnicity[ds$Ethnicity == "Native indian"] <- 5
+ds$Ethnicity[ds$Ethnicity == "Native Indian"] <- 5
+ds$Ethnicity[ds$Ethnicity == "White European"] <- 6
+ds$Ethnicity[ds$Ethnicity == "Others"] <- 7
+ds$Ethnicity[ds$Ethnicity == "Mixed"] <- 7
+ds$Ethnicity[ds$Ethnicity == "mixed"] <- 7
+ds$Ethnicity[ds$Ethnicity == "South Asian"] <- 8
+ds$Ethnicity[ds$Ethnicity == "south asian"] <- 8
+ds$Ethnicity[ds$Ethnicity == "paciFica"] <- 9
+ds$Ethnicity[ds$Ethnicity == "PaciFica"] <- 9
+
+ds$`Learning disorder`<- as.numeric(as.character(ds$`Learning disorder`))
+ds$Sex <- as.numeric(as.character(ds$Sex))
+ds$Family_mem_with_ASD <- as.numeric(as.character(ds$Family_mem_with_ASD))
+ds$Ethnicity <- as.numeric(as.character(ds$Ethnicity))
+View(ds)
+```
+#Mixing the data 
+```{r}
+set.seed(666)
+mixed_ds = ds[sample(1:nrow(ds)), ]
+```
+#Bringning the variable of interest (Learning_Disorder) as the first column in the dataset 
+```{r}
+set.seed(666)
+mixed_ds1 <- mixed_ds[, c(2,1,3,4,5,6)]
+```
+#Getting rid of spaces in variable's name
+```{r}
+colnames(mixed_ds1) <- c('Learning_Disorder', 'Age', 'Sex', 'Ethnicity','Family','ASQ')
+```
+#Spliting data into 80% train and 20% test 
+```{r}
+train_test_split_index <- 0.8 * nrow(mixed_ds1)
+train <- mixed_ds1[1:train_test_split_index,]
+test <- mixed_ds1[(train_test_split_index+1) : nrow(mixed_ds1),]
+```
+#Neuronal network #1
+```{r}
+set.seed(666)
+nn1 <- neuralnet(Learning_Disorder ~ Age+Sex+Family+Ethnicity+ASQ, data = train, hidden=3, threshold = 0.01, stepmax = 1e05, learningrate.limit = NULL, learningrate.factor = (list(minus = 0.5, plus = 1.2)), err.fct = "sse", act.fct = "logistic", exclude = NULL, likelihood = FALSE, learningrate = 0.01,
+
+             linear.output = FALSE)
+```
+#Plotting NN1
+```{r}
+plot(nn1)
+```
+#Evaluating performance of NN1 on test data 
+```{r}
+n.results <- neuralnet::compute(nn1, test)
+results <- data.frame(actual = test$Learning_Disorder, prediction = n.results)
+resultss <- data.frame(actual = test$Learning_Disorder, prediction = n.results$net.result)
+resultss$prediction <- ifelse(resultss$prediction > 0.5,1,0)
+View(resultss)
+```
+#Confusion matrix for NN1 
+```{r}
+roundedresults<-sapply(resultss,round,digits=0)
+roundedresultsdf=data.frame(roundedresults)
+attach(roundedresultsdf)
+table(actual,prediction)
+```
+#Sensitivity, specificity and accuracy for NN1
+```{r}
+sensitivity = (193 / (193+21))* 100
+print(sensitivity)
+specificity = (180 / (3+180))* 100
+print(specificity)
+Accuracy = ((193+180)/(3+21+180+193))*100
+print(Accuracy)
+```
+#Looking at the importance of specific weights in the NN1 model 
+```{r}
+gwplot(nn1, selected.covariate = "Age", min = -2, max = 4)
+gwplot(nn1, selected.covariate = "Sex", min = -2, max = 4)
+gwplot(nn1, selected.covariate = "Family", min = -2, max = 4)
+gwplot(nn1, selected.covariate = "Ethnicity", min = -2, max = 4)
+gwplot(nn1, selected.covariate = "ASQ", min = -2, max = 4)
+```
+#Trying out fitting NN1 using Keras = NN2
+#Transforming train set and test set into matrices
+```{r}
+set.seed(666)
+train_matrix <- as.matrix(train)
+test_matrix <- as.matrix(test)
+
+train_matrix_final <- train_matrix[,2:6]
+traintarget <- train_matrix[,1]
+test_matrix_final <- test_matrix[,2:6]
+testtarget <- test_matrix[,1]
+```
+#Fitting NN1 using Keras = NN2
+```{r}
+nn2 <- keras_model_sequential()
+nn2 %>%
+  layer_dense(units = 8, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 6, activation = 'relu')%>%
+  layer_dense(units = 4, activation = 'relu')%>%
+  layer_dense(units = 4, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+```
+#Compile model NN2
+```{r}
+nn2 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+```
+#Fitting model NN2
+```{r}
+my_nn2 <- nn2 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=50,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+```
+#Testing model NN3 after training on test data 
+```{r}
+nn2 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn2 %>% predict(test_matrix_final)
+results2 <- tibble(actual= testtarget, prediction= pred)
+results2$prediction <- ifelse(results2$prediction > 0.6,1,0)
+```
+#Confusing matrix for NN3
+```{r}
+roundedresults2<-sapply(results2,round,digits=0)
+roundedresults2df=data.frame(roundedresults2)
+attach(roundedresults2df)
+table(actual,prediction)
+```
+#Sensitivity, specificity and accuracy for NN2
+```{r}
+sensitivity = (198 / (198+16))* 100
+print(sensitivity)
+specificity = (181 / (2+181))* 100
+print(specificity)
+Accuracy = ((198+181)/(2+16+181+198))*100
+print(Accuracy)
+```
+#Finally, the initial model is, in itself, very good in terms of accuracy, specificity and sensibility probably because the ASQ score is also a good predictor of learning disorder in this population
+#The trained model increased sensibility from 90% to 92,5% and accuracy from 94% to nearly 95,5% with a stable specificity
