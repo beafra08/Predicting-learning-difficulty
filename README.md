@@ -20,7 +20,7 @@ After removing unwanted data for the model, we created a neuronal network with t
 
 ## Challenges
 2 challenges we had during the project : 
-1) Firslty, the precision curves for some of the models were very chaotic telling us the model was loosing precision for a brief period of time. We observed that this was most frequent with networks with more nodes. One of the possible explanation is that the batching was originally done sequentially instead of randomly. This was adjusted in the second version (V2).
+1) Firslty, the precision curves for some of the models were very chaotic telling us the model was loosing precision for a brief period of time. We observed that this was most frequent with networks with more nodes. One of the possible explanation is that the batching was originally done sequentially instead of randomly. This will be adjusted in the second version (V2).
 2) The models were all very performant in terms of accuracy with results between 90 and 95% for all models. One of the explanation was the use of the ASQ score without looking firslty at its relation with learning disorder. At the end of the project, in an attempt to explain the "too-good-to-be-true" performance of our models, we plotted the relation between the two and it is easy to see that all the patients with a score of 2-10 had a learning disorder. 
 
 ## Explanations 
@@ -31,9 +31,11 @@ Few explanations about some decision we made during the project
 ## Content
 1) Code R : the first version of our project including only the best model 
 2) Code R FittingModels: the first version of our project including the total 30 models
-3) Code R V2 : the final version with addition of random sampling in the model fitting 
-4) Code R FittingModels V2: the final version with addition of random sampling in the model fitting 
-5) README file
+3) README file
+
+## Upcoming
+A v2 version of both codes will be updated shortly with normalization of the data and a random batch selection for the validation set 
+The results will still not be usable as the imput of ASQ score will still be wrong because of its relation with the output as stated before
 
 ## License 
 No License 
