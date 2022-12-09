@@ -22,7 +22,7 @@ install_tensorflow()
 #Open the csv-type database in R
 ```{r}
 library(readr)
-data_csv <- read_csv("ASD FP/data_csv.csv")
+data_csv <- read_csv("data_csv.csv")
 stringsAsFactors=FALSE
 ```
 #Looking for duplicates in the dataset
@@ -31,6 +31,8 @@ duplicated(data_csv)
 options(max.print = 9999999)
 ```
 #Finding missing data
+#Note that this step could be skipped here because none of the variables used in our model had missing variables. More over it would have been possible to simply deleate the patients with missing values as they represent around 2% in total of the dataset
+#We still decided to impute the missing data as the probability to impute errors is small
 ```{r}
 which(is.na(data_csv$`CASE_NO_PATIENT'S`))
 which(is.na(data_csv$A1))
@@ -125,6 +127,7 @@ data_csv$Qchat_10_Score[is.na(data_csv$Qchat_10_Score)] <- 6
 #Creating new dataset with desired variables
 #Combining the Autism Spectrum Quotien score (A1 + A2 ...+A10) = ASQ
 #Deleating unwanted variables for our model #1
+#We decided to keep only : age, sexe, ethnicity, family member with ASD and the ASQ score
 ```{r}
 ds <- data_csv[,-1]
 rowSums(ds[, c(1:10)], na.rm = TRUE)
@@ -137,6 +140,14 @@ ds <- ds[,-3]
 ds <- ds[,-2]
 ds <- ds[,-5]
 View(ds)
+```
+#Plotting ASQ distribution to see if our output is well balanced in our population
+```{r}
+n=1985
+Y2 = ds$ASQ
+y2 = sample(Y2, n, replace = TRUE)
+x2 = runif(n)
+plot(y2,x2)
 ```
 #Transforming categorical data into numeric data 
 ```{r}
@@ -174,6 +185,10 @@ ds$Sex <- as.numeric(as.character(ds$Sex))
 ds$Family_mem_with_ASD <- as.numeric(as.character(ds$Family_mem_with_ASD))
 ds$Ethnicity <- as.numeric(as.character(ds$Ethnicity))
 View(ds)
+```
+#Plottting
+```{r}
+plot(ds$ASQ, ds$`Learning disorder`)
 ```
 #Mixing the data 
 ```{r}
@@ -236,7 +251,7 @@ gwplot(nn1, selected.covariate = "Age", min = -2, max = 4)
 gwplot(nn1, selected.covariate = "Sex", min = -2, max = 4)
 gwplot(nn1, selected.covariate = "Family", min = -2, max = 4)
 gwplot(nn1, selected.covariate = "Ethnicity", min = -2, max = 4)
-gwplot(nn1, selected.covariate = "ASQ", min = -2, max = 4)
+gwplot(nn1, selected.covariate = "ASQ", min = -10, max = 1000)
 ```
 #Trying out fitting NN1 using Keras = NN2
 #Transforming train set and test set into matrices
@@ -269,7 +284,7 @@ nn2 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
 my_nn2 <- nn2 %>%
   fit(train_matrix_final,
       traintarget,
-      epochs=50,
+      epochs=80,
       batch_size = 32,
       validation_split = 0.2,
       )
@@ -297,5 +312,19 @@ print(specificity)
 Accuracy = ((198+181)/(2+16+181+198))*100
 print(Accuracy)
 ```
-#Finally, the initial model is, in itself, very good in terms of accuracy, specificity and sensibility probably because the ASQ score is also a good predictor of learning disorder in this population
+#Finally, the initial model is, in itself, very good in terms of accuracy, specificity and sensibility probably because the ASQ score is also deeply related to the presence of learning disorder in this population
 #The trained model increased sensibility from 90% to 92,5% and accuracy from 94% to nearly 95,5% with a stable specificity
+------
+#Investigating why the model is this good 
+#Comparing the main input and the output in the train and test data to see if well balanced
+```{r}
+hist(train$ASQ)
+hist(test$ASQ)
+hist(train$Learning_Disorder)
+hist(test$Learning_Disorder)
+```
+#Plottting the relation between ASQ score and Learning disorder
+```{r}
+plot(ds$ASQ, ds$`Learning disorder`)
+```
+#As it is possible to see, all the patient with the score equal or superior to 2 have a learning disorder, making it easy for a model to predict learning disorder presence with ASQ score as an imput. 
