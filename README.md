@@ -25,14 +25,14 @@ After removing unwanted data for the model, we created a neuronal network with t
 
 ## Explanations 
 Few explanations about some decision we made during the project 
-1) Normalization : It is very common to normalize the data before using it in neuronal networks. We decided not to do it in the first version as most of the data used where binary (No = 0, Yes = 1). We still instored a normalization process in V2.
+1) Normalization : It is very common to normalize the data before using it in neuronal networks. We decided not to do it as most of the data used where binary (No = 0, Yes = 1).
 2) Imputing missing data: We decided to impute missing data with most frequent for categorial data and mean/mode for continuous data. They looked like they were missing at random. We could have simply deleated the patients with missing data as they represent less than 2% of the data and that we did not even use variables with missing data. We decided to impute the data mainly to practice doing so in a coding project and because we thought it would not have a big impact on variance as it was less than 2% as stated before. 
 
 ## Content
 1) Code R : the first version of our project including only the best model 
 2) Code R FittingModels: the first version of our project including the total 30 models
-3) Code R V2 : the final version with normalization of the ASQ score data and the addition of random sampling in the model fitting 
-4) Code R FittingModels V2: the final version with normalization of the ASQ score data and the addition of random sampling in the model fitting 
+3) Code R V2 : the final version with addition of random sampling in the model fitting 
+4) Code R FittingModels V2: the final version with addition of random sampling in the model fitting 
 5) README file
 
 ## License 
