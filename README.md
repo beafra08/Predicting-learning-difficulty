@@ -1,4 +1,4 @@
-# Title : Predicting learning difficulties in ASD patients
+# Predicting learning difficulties in ASD patients
 
 ## Data
 The project was developed using data available at the following web site : https://www.kaggle.com/datasets/uppulurimadhuri/dataset
