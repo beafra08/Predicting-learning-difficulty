@@ -186,10 +186,6 @@ ds$Family_mem_with_ASD <- as.numeric(as.character(ds$Family_mem_with_ASD))
 ds$Ethnicity <- as.numeric(as.character(ds$Ethnicity))
 View(ds)
 ```
-#Plottting
-```{r}
-plot(ds$ASQ, ds$`Learning disorder`)
-```
 #Mixing the data 
 ```{r}
 set.seed(666)
