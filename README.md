@@ -21,7 +21,7 @@ After removing unwanted data for the model, we created a neuronal network with t
 ## Challenges
 2 challenges we had during the project : 
 1) Firslty, the precision curves for some of the models were very chaotic telling us the model was loosing precision for a brief period of time. We observed that this was most frequent with networks with more nodes. One of the possible explanation is that the batching was originally done sequentially instead of randomly. This was adjusted in the second version (V2).
-2)The models were all very performant in terms of accuracy with results between 90 and 95% for all models. One of the explanation was the use of the ASQ score without looking firslty at its relation with learning disorder. At the end of the project, in an attempt to explain the "too-good-to-be-true" performance of our models, we plotted the relation between the two and it is easy to see that all the patients with a score of 2-10 had a learning disorder. 
+2) The models were all very performant in terms of accuracy with results between 90 and 95% for all models. One of the explanation was the use of the ASQ score without looking firslty at its relation with learning disorder. At the end of the project, in an attempt to explain the "too-good-to-be-true" performance of our models, we plotted the relation between the two and it is easy to see that all the patients with a score of 2-10 had a learning disorder. 
 
 ## Explanations 
 Few explanations about some decision we made during the project 
