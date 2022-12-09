@@ -280,7 +280,7 @@ nn2 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
 my_nn2 <- nn2 %>%
   fit(train_matrix_final,
       traintarget,
-      epochs=80,
+      epochs=50,
       batch_size = 32,
       validation_split = 0.2,
       )
