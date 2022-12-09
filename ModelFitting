@@ -1,0 +1,1444 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+#Dowloading important packages
+```{r}
+install.packages("neuralnet")
+install.packages("caret")
+install.packages("Rcpp")
+install.packages("devtools")
+devtools::install_github("rstudio/tensorflow")
+devtools::install_github("rstudio/keras")
+devtools::install_github("bips-hb/neuralnet")
+library(neuralnet)
+library(dplyr)
+library(magrittr)
+library(caret)
+library(keras)
+library(tensorflow)
+library(lattice)
+library(ggplot2)
+install_tensorflow()
+```
+#Open the csv-type database in R
+```{r}
+library(readr)
+data_csv <- read_csv("data_csv.csv")
+stringsAsFactors=FALSE
+```
+#Looking for duplicates in the dataset
+```{r}
+duplicated(data_csv)
+options(max.print = 999999)
+```
+#Finding missing data
+```{r}
+which(is.na(data_csv$`CASE_NO_PATIENT'S`))
+which(is.na(data_csv$A1))
+which(is.na(data_csv$A2))
+which(is.na(data_csv$A3))
+which(is.na(data_csv$A4))
+which(is.na(data_csv$A5))
+which(is.na(data_csv$A6))
+which(is.na(data_csv$A7))
+which(is.na(data_csv$A8))
+which(is.na(data_csv$A9))
+which(is.na(data_csv$A10_Autism_Spectrum_Quotient))
+which(is.na(data_csv$Social_Responsiveness_Scale))
+which(is.na(data_csv$Age_Years))
+which(is.na(data_csv$Qchat_10_Score))
+which(is.na(data_csv$`Speech Delay/Language Disorder`))
+which(is.na(data_csv$`Learning disorder`))
+which(is.na(data_csv$Genetic_Disorders))
+which(is.na(data_csv$Depression))
+which(is.na(data_csv$`Global developmental delay/intellectual disability`))
+which(is.na(data_csv$`Social/Behavioural Issues`))
+which(is.na(data_csv$`Childhood Autism Rating Scale`))
+which(is.na(data_csv$Anxiety_disorder))
+which(is.na(data_csv$Sex))
+which(is.na(data_csv$Ethnicity))
+which(is.na(data_csv$Jaundice))
+which(is.na(data_csv$Family_mem_with_ASD))
+which(is.na(data_csv$Who_completed_the_test))
+which(is.na(data_csv$ASD_traits))
+```
+#Note that this step could be skipped here because none of the variables used in our model had missing variables. More over it would have been possible to simply deleate the patients with missing values as they represent around 2% in total of the dataset
+#We still decided to impute the missing data as the probability to impute errors is small
+#Finding the mode for the missing data 
+```{r}
+getmode <- function(v) {
+   uniqv <- unique(v)
+   uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+v <- data_csv$Social_Responsiveness_Scale
+result <- getmode(v)
+print(result)
+
+v1 <- data_csv$Qchat_10_Score
+result <- getmode(v1)
+print(result)
+
+v2 <- data_csv$Depression
+result <- getmode(v2)
+print(result)
+
+v3 <- data_csv$`Social/Behavioural Issues`
+result <-getmode(v3)
+print(result)
+```
+#Finding the mean for missing data 
+```{r}
+result.mean <- mean(data_csv$Social_Responsiveness_Scale, na.rm = TRUE)
+print(result.mean)
+
+result.mean <- mean(data_csv$Qchat_10_Score, na.rm = TRUE)
+print(result.mean)
+```
+#Distribution of Social responsivess scale 
+```{r}
+n = 1000
+Y = data_csv$Social_Responsiveness_Scale
+y = sample(Y, n, replace = TRUE)
+x = runif(n)
+plot(y,x)
+```
+#Distribution of Qchat-10 score
+```{r}
+n=1000
+Y1 = data_csv$Qchat_10_Score
+y1 = sample(Y1, n, replace = TRUE)
+x1 = runif(n)
+plot(y1,x1)
+```
+#Substituting NA values for YES in depression and social/behavioral issues 
+```{r}
+data_csv$Depression[is.na(data_csv$Depression)] <- "Yes" 
+
+data_csv$`Social/Behavioural Issues`[is.na(data_csv$`Social/Behavioural Issues`)] <- "Yes"
+```
+#Substituting NA values for the mean in Social Responsiveness scale
+```{r}
+data_csv$Social_Responsiveness_Scale[is.na(data_csv$Social_Responsiveness_Scale)] <- 3 
+```
+#Substituting NA values for the mode in Qchat 10 score 
+```{r}
+data_csv$Qchat_10_Score[is.na(data_csv$Qchat_10_Score)] <- 6
+```
+#Creating new dataset (ds) with desired variables
+#Combining the Autism Spectrum Quotien score (A1 + A2 ...+A10) = ASQ
+#Deleating unwanted variables for our model #1
+#We decided to keep only : age, sexe, ethnicity, family member with ASD and the ASQ score
+```{r}
+ds <- data_csv[,-1]
+rowSums(ds[, c(1:10)], na.rm = TRUE)
+ds$ASQ <- rowSums(ds[ , c(1:10)], na.rm=TRUE)
+ds <- ds[,-(1:10)]
+ds <- ds[,-1]
+ds <- ds[, -(5:10)]
+ds <- ds[, -(9:10)]
+ds <- ds[,-3]
+ds <- ds[,-2]
+ds <- ds[,-5]
+View(ds)
+```
+#Transforming categorical data into numeric data 
+```{r}
+ds$`Learning disorder`[ds$`Learning disorder`=="Yes"] <- 1
+ds$`Learning disorder`[ds$`Learning disorder`=="No"] <- 0
+
+ds$Sex[ds$Sex =="M"] <- 1
+ds$Sex[ds$Sex=="F"] <- 0
+
+ds$Family_mem_with_ASD[ds$Family_mem_with_ASD =="Yes"] <- 1
+ds$Family_mem_with_ASD[ds$Family_mem_with_ASD=="No"] <- 0
+
+ds$Ethnicity[ds$Ethnicity == "Asian"] <- 1
+ds$Ethnicity[ds$Ethnicity == "asian"] <- 1
+ds$Ethnicity[ds$Ethnicity == "Black"] <- 2
+ds$Ethnicity[ds$Ethnicity == "black"] <- 2
+ds$Ethnicity[ds$Ethnicity == "Hispanic"] <- 3
+ds$Ethnicity[ds$Ethnicity == "latino"] <- 3
+ds$Ethnicity[ds$Ethnicity == "Latino"] <- 3
+ds$Ethnicity[ds$Ethnicity == "Middle Eastern"] <- 4
+ds$Ethnicity[ds$Ethnicity == "middle eastern"] <- 4
+ds$Ethnicity[ds$Ethnicity == "Native indian"] <- 5
+ds$Ethnicity[ds$Ethnicity == "Native Indian"] <- 5
+ds$Ethnicity[ds$Ethnicity == "White European"] <- 6
+ds$Ethnicity[ds$Ethnicity == "Others"] <- 7
+ds$Ethnicity[ds$Ethnicity == "Mixed"] <- 7
+ds$Ethnicity[ds$Ethnicity == "mixed"] <- 7
+ds$Ethnicity[ds$Ethnicity == "South Asian"] <- 8
+ds$Ethnicity[ds$Ethnicity == "south asian"] <- 8
+ds$Ethnicity[ds$Ethnicity == "paciFica"] <- 9
+ds$Ethnicity[ds$Ethnicity == "PaciFica"] <- 9
+
+ds$`Learning disorder`<- as.numeric(as.character(ds$`Learning disorder`))
+ds$Sex <- as.numeric(as.character(ds$Sex))
+ds$Family_mem_with_ASD <- as.numeric(as.character(ds$Family_mem_with_ASD))
+ds$Ethnicity <- as.numeric(as.character(ds$Ethnicity))
+View(ds)
+```
+#Mixing the data 
+```{r}
+set.seed(666)
+mixed_ds = ds[sample(1:nrow(ds)), ]
+```
+#Bringning the variable of interest (Learning_Disorder) as the first column in the dataset 
+```{r}
+set.seed(666)
+mixed_ds1 <- mixed_ds[, c(2,1,3,4,5,6)]
+```
+#Getting rid of spaces in variable's name
+```{r}
+colnames(mixed_ds1) <- c('Learning_Disorder', 'Age', 'Sex', 'Ethnicity','Family','ASQ')
+```
+#Spliting data into 80% train and 20% test 
+```{r}
+train_test_split_index <- 0.8 * nrow(mixed_ds1)
+train <- mixed_ds1[1:train_test_split_index,]
+test <- mixed_ds1[(train_test_split_index+1) : nrow(mixed_ds1),]
+```
+#Neuronal network #Base
+```{r}
+set.seed(666)
+nBase <- neuralnet(Learning_Disorder ~ Age+Sex+Family+Ethnicity+ASQ, data = train, hidden=3, threshold = 0.01, stepmax = 1e05, learningrate.limit = NULL, learningrate.factor = (list(minus = 0.5, plus = 1.2)), err.fct = "sse", act.fct = "logistic", exclude = NULL, likelihood = FALSE, learningrate = 0.01,
+
+             linear.output = FALSE)
+```
+#Plotting nBase
+```{r}
+plot(nBase)
+```
+#Evaluating performance of nBase on test data 
+```{r}
+n.results <- neuralnet::compute(nBase, test)
+results <- data.frame(actual = test$Learning_Disorder, prediction = n.results)
+resultss <- data.frame(actual = test$Learning_Disorder, prediction = n.results$net.result)
+resultss$prediction <- ifelse(resultss$prediction > 0.5,1,0)
+```
+#Confusion matrix for nBase
+```{r}
+roundedresults<-sapply(resultss,round,digits=0)
+roundedresultsdf=data.frame(roundedresults)
+attach(roundedresultsdf)
+table(actual,prediction)
+```
+#Sensitivity, specificity and accuracy for nBase
+```{r}
+sensitivity = (193 / (193+21))* 100
+print(sensitivity)
+specificity = (180 / (3+180))* 100
+print(specificity)
+Accuracy = ((193+180)/(3+21+180+193))*100
+print(Accuracy)
+```
+#Looking at the importance of specific weights in the nBase model 
+```{r}
+gwplot(nBase, selected.covariate = "Age", min = -2, max = 4)
+gwplot(nBase, selected.covariate = "Sex", min = -2, max = 4)
+gwplot(nBase, selected.covariate = "Family", min = -2, max = 4)
+gwplot(nBase, selected.covariate = "Ethnicity", min = -2, max = 4)
+gwplot(nBase, selected.covariate = "ASQ", min = -2, max = 4)
+```
+#Trying out fitting nBase using keras and imputing new number of either epochs, total layers or nodes = nn1 to 30
+#Transforming train set and test set into matrices so the data can be run in the keras form 
+```{r}
+set.seed(666)
+train_matrix <- as.matrix(train)
+test_matrix <- as.matrix(test)
+
+train_matrix_final <- train_matrix[,2:6]
+traintarget <- train_matrix[,1]
+test_matrix_final <- test_matrix[,2:6]
+testtarget <- test_matrix[,1]
+```
+#Fitting NN1
+```{r}
+nn1 <- keras_model_sequential()
+nn1 %>%
+  layer_dense(units = 8, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 6, activation = 'relu')%>%
+  layer_dense(units = 4, activation = 'relu')%>%
+  layer_dense(units = 4, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+#Compile model NN1
+
+nn1 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+#Fitting model NN1
+
+my_nn1 <- nn1 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=50,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+#Testing model NN1 after training on test data 
+
+nn1 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn1 %>% predict(test_matrix_final)
+results1 <- tibble(actual= testtarget, prediction= pred)
+results1$prediction <- ifelse(results1$prediction > 0.6,1,0)
+
+#Confusing matrix for NN1
+
+roundedresults1<-sapply(results1,round,digits=0)
+roundedresults1df=data.frame(roundedresults1)
+attach(roundedresults1df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN1
+sensitivity = (198 / (198+16))* 100
+print(sensitivity)
+specificity = (181 / (2+181))* 100
+print(specificity)
+Accuracy = ((198+181)/(2+16+181+198))*100
+print(Accuracy)
+```
+#Fitting NN2
+```{r}
+nn2 <- keras_model_sequential()
+nn2 %>%
+  layer_dense(units = 12, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+#Compile model NN2
+
+nn2 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn2 <- nn2 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=30,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+#Testing model NN2 after training on test data 
+
+nn2 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn2 %>% predict(test_matrix_final)
+results2 <- tibble(actual= testtarget, prediction= pred)
+results2$prediction <- ifelse(results2$prediction > 0.6,1,0)
+
+#Confusing matrix for NN2
+
+roundedresults2<-sapply(results2,round,digits=0)
+roundedresults2df=data.frame(roundedresults2)
+attach(roundedresults2df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN2
+sensitivity = (191 / (191+23))* 100
+print(sensitivity)
+specificity = (178 / (5+178))* 100
+print(specificity)
+Accuracy = ((191+178)/(5+23+178+191))*100
+print(Accuracy)
+```
+#Fitting NN3
+```{r}
+nn3 <- keras_model_sequential()
+nn3 %>%
+  layer_dense(units = 8, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+#Compile model NN3
+
+nn3 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+#Fitting model NN3
+
+my_nn3 <- nn3 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=75,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+#Testing model NN3 after training on test data 
+
+nn3 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn3 %>% predict(test_matrix_final)
+results3 <- tibble(actual= testtarget, prediction= pred)
+results3$prediction <- ifelse(results3$prediction > 0.6,1,0)
+
+#Confusing matrix for NN3
+
+roundedresults3<-sapply(results3,round,digits=0)
+roundedresults3df=data.frame(roundedresults3)
+attach(roundedresults3df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN3
+
+sensitivity = (190 / (190+24))* 100
+print(sensitivity)
+specificity = (181 / (2+181))* 100
+print(specificity)
+Accuracy = ((190+181)/(2+24+181+190))*100
+print(Accuracy)
+```
+#Fitting NN4 
+```{r}
+nn4 <- keras_model_sequential()
+nn4 %>%
+  layer_dense(units = 8, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+#Compile model NN4
+
+nn4 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+#Fitting model NN4
+
+my_nn4 <- nn4 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=50,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+#Testing model NN4 after training on test data 
+
+nn4 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn4 %>% predict(test_matrix_final)
+results4 <- tibble(actual= testtarget, prediction= pred)
+results4$prediction <- ifelse(results4$prediction > 0.6,1,0)
+
+#Confusing matrix for NN4
+
+roundedresults4<-sapply(results4,round,digits=0)
+roundedresults4df=data.frame(roundedresults4)
+attach(roundedresults4df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN4
+
+sensitivity = (185 / (185+29))* 100
+print(sensitivity)
+specificity = (180 / (3+180))* 100
+print(specificity)
+Accuracy = ((185+180)/(3+29+180+185))*100
+print(Accuracy)
+```
+#Fitting NN5
+```{r}
+nn5 <- keras_model_sequential()
+nn5 %>%
+  layer_dense(units = 8, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+#Compile model NN5
+
+nn5 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+#Fitting model NN5
+
+my_nn5 <- nn5 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=20,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+#Testing model NN5 after training on test data 
+
+nn5 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn5 %>% predict(test_matrix_final)
+results5 <- tibble(actual= testtarget, prediction= pred)
+results5$prediction <- ifelse(results5$prediction > 0.6,1,0)
+
+#Confusing matrix for NN5
+
+roundedresults5<-sapply(results5,round,digits=0)
+roundedresults5df=data.frame(roundedresults5)
+attach(roundedresults5df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN5
+
+sensitivity = (185 / (185+29))* 100
+print(sensitivity)
+specificity = (181 / (2+181))* 100
+print(specificity)
+Accuracy = ((185+181)/(2+29+181+185))*100
+print(Accuracy)
+```
+#Fitting NN6
+```{r}
+nn6 <- keras_model_sequential()
+nn6 %>%
+  layer_dense(units = 15, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn6 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn6 <- nn6 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=50,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn6 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn6 %>% predict(test_matrix_final)
+results6 <- tibble(actual= testtarget, prediction= pred)
+results6$prediction <- ifelse(results6$prediction > 0.6,1,0)
+
+roundedresults6<-sapply(results6,round,digits=0)
+roundedresults6df=data.frame(roundedresults6)
+attach(roundedresults6df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN6
+sensitivity = (195 / (195+19))* 100
+print(sensitivity)
+specificity = (180 / (3+180))* 100
+print(specificity)
+Accuracy = ((195+180)/(3+19+180+195))*100
+print(Accuracy)
+```
+#Fitting NN7
+```{r}
+nn7 <- keras_model_sequential()
+nn7 %>%
+  layer_dense(units = 15, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn7 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn7 <- nn7 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=75,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn7 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn7 %>% predict(test_matrix_final)
+results7 <- tibble(actual= testtarget, prediction= pred)
+results7$prediction <- ifelse(results7$prediction > 0.6,1,0)
+
+roundedresults7<-sapply(results7,round,digits=0)
+roundedresults7df=data.frame(roundedresults7)
+attach(roundedresults7df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN7
+
+sensitivity = (196 / (196+18))* 100
+print(sensitivity)
+specificity = (179 / (4+179))* 100
+print(specificity)
+Accuracy = ((196+179)/(4+18+179+196))*100
+print(Accuracy)
+```
+#Fitting NN8
+```{r}
+nn8 <- keras_model_sequential()
+nn8 %>%
+  layer_dense(units = 15, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn8 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn8 <- nn8 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=40,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn8 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn8 %>% predict(test_matrix_final)
+results8 <- tibble(actual= testtarget, prediction= pred)
+results8$prediction <- ifelse(results8$prediction > 0.6,1,0)
+
+roundedresults8<-sapply(results8,round,digits=0)
+roundedresults8df=data.frame(roundedresults8)
+attach(roundedresults8df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN8
+
+sensitivity = (192 / (192+22))* 100
+print(sensitivity)
+specificity = (181 / (2+181))* 100
+print(specificity)
+Accuracy = ((192+181)/(2+22+181+192))*100
+print(Accuracy)
+```
+#Fitting NN9
+```{r}
+nn9 <- keras_model_sequential()
+nn9 %>%
+  layer_dense(units = 15, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn9 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn9 <- nn9 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=10,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn9 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn9 %>% predict(test_matrix_final)
+results9 <- tibble(actual= testtarget, prediction= pred)
+results9$prediction <- ifelse(results9$prediction > 0.6,1,0)
+
+roundedresults9<-sapply(results9,round,digits=0)
+roundedresults9df=data.frame(roundedresults9)
+attach(roundedresults9df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN9
+
+sensitivity = (188 / (188+26))* 100
+print(sensitivity)
+specificity = (181 / (2+181))* 100
+print(specificity)
+Accuracy = ((188+181)/(2+26+181+188))*100
+print(Accuracy)
+```
+#Fitting NN10
+```{r}
+nn10 <- keras_model_sequential()
+nn10 %>%
+  layer_dense(units = 15, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn10 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn10 <- nn10 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=100,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn10 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn10 %>% predict(test_matrix_final)
+results10 <- tibble(actual= testtarget, prediction= pred)
+results10$prediction <- ifelse(results10$prediction > 0.6,1,0)
+
+roundedresults10<-sapply(results10,round,digits=0)
+roundedresults10df=data.frame(roundedresults10)
+attach(roundedresults11df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN10
+
+sensitivity = (198 / (198+16))* 100
+print(sensitivity)
+specificity = (179 / (4+179))* 100
+print(specificity)
+Accuracy = ((198+179)/(4+16+179+198))*100
+print(Accuracy)
+```
+#Fitting NN11
+```{r}
+nn11 <- keras_model_sequential()
+nn11 %>%
+  layer_dense(units = 15, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn11 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn11 <- nn11 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=100,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn11 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn11 %>% predict(test_matrix_final)
+results11 <- tibble(actual= testtarget, prediction= pred)
+results11$prediction <- ifelse(results11$prediction > 0.6,1,0)
+
+roundedresults11<-sapply(results11,round,digits=0)
+roundedresults11df=data.frame(roundedresults11)
+attach(roundedresults11df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN11
+
+sensitivity = (194 / (194+20))* 100
+print(sensitivity)
+specificity = (180 / (3+180))* 100
+print(specificity)
+Accuracy = ((194+180)/(3+20+180+194))*100
+print(Accuracy)
+```
+#Fitting NN12
+```{r}
+nn12 <- keras_model_sequential()
+nn12 %>%
+  layer_dense(units = 15, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn12 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn12 <- nn12 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=75,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn12 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn12 %>% predict(test_matrix_final)
+results12 <- tibble(actual= testtarget, prediction= pred)
+results12$prediction <- ifelse(results13$prediction > 0.6,1,0)
+
+roundedresults12<-sapply(results12,round,digits=0)
+roundedresults12df=data.frame(roundedresults12)
+attach(roundedresults12df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN12
+
+sensitivity = (196 / (196+18))* 100
+print(sensitivity)
+specificity = (179 / (4+179))* 100
+print(specificity)
+Accuracy = ((196+179)/(4+18+179+196))*100
+print(Accuracy)
+```
+#Fitting NN13
+```{r}
+nn13 <- keras_model_sequential()
+nn13 %>%
+  layer_dense(units = 15, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 3, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn13 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn13 <- nn13 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=42,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn13 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn13 %>% predict(test_matrix_final)
+results13 <- tibble(actual= testtarget, prediction= pred)
+results13$prediction <- ifelse(results13$prediction > 0.6,1,0)
+
+roundedresults13<-sapply(results13,round,digits=0)
+roundedresults13df=data.frame(roundedresults13)
+attach(roundedresults13df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN13
+
+sensitivity = (194 / (194+20))* 100
+print(sensitivity)
+specificity = (182 / (1+182))* 100
+print(specificity)
+Accuracy = ((194+182)/(1+20+182+194))*100
+print(Accuracy)
+```
+#Fitting NN14
+```{r}
+nn14 <- keras_model_sequential()
+nn14 %>%
+  layer_dense(units = 15, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 3, activation = 'relu')%>%
+  layer_dense(units = 3, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn14 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn14 <- nn14 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=75,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn14 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn14 %>% predict(test_matrix_final)
+results14 <- tibble(actual= testtarget, prediction= pred)
+results14$prediction <- ifelse(results14$prediction > 0.6,1,0)
+
+roundedresults14<-sapply(results14,round,digits=0)
+roundedresults14df=data.frame(roundedresults14)
+attach(roundedresults14df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN14
+
+sensitivity = (196 / (196+18))* 100
+print(sensitivity)
+specificity = (180 / (3+180))* 100
+print(specificity)
+Accuracy = ((196+180)/(3+18+180+196))*100
+print(Accuracy)
+```
+#Fitting NN15
+```{r}
+nn15 <- keras_model_sequential()
+nn15 %>%
+  layer_dense(units = 20, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 15, activation = 'relu')%>%
+  layer_dense(units = 15, activation = 'relu')%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 3, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn15 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn15 <- nn15 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=30,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn15 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn15 %>% predict(test_matrix_final)
+results15 <- tibble(actual= testtarget, prediction= pred)
+results15$prediction <- ifelse(results15$prediction > 0.6,1,0)
+
+roundedresults15<-sapply(results15,round,digits=0)
+roundedresults15df=data.frame(roundedresults15)
+attach(roundedresults15df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN15
+
+sensitivity = (196 / (196+18))* 100
+print(sensitivity)
+specificity = (178 / (5+178))* 100
+print(specificity)
+Accuracy = ((196+178)/(5+18+178+196))*100
+print(Accuracy)
+```
+#Fitting NN16
+```{r}
+nn16 <- keras_model_sequential()
+nn16 %>%
+  layer_dense(units = 20, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 3, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn16 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn16 <- nn16 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=75,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn16 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn16 %>% predict(test_matrix_final)
+results16 <- tibble(actual= testtarget, prediction= pred)
+results16$prediction <- ifelse(results16$prediction > 0.6,1,0)
+
+roundedresults16<-sapply(results16,round,digits=0)
+roundedresults16df=data.frame(roundedresults16)
+attach(roundedresults16df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN16
+sensitivity = (196 / (196+18))* 100
+print(sensitivity)
+specificity = (183 / (0+183))* 100
+print(specificity)
+Accuracy = ((196+183)/(0+18+183+196))*100
+print(Accuracy)
+```
+#Fitting NN17
+```{r}
+nn17 <- keras_model_sequential()
+nn17 %>%
+  layer_dense(units = 40, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 20, activation = 'relu')%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn17 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn17 <- nn17 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=75,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn17 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn17 %>% predict(test_matrix_final)
+results17 <- tibble(actual= testtarget, prediction= pred)
+results17$prediction <- ifelse(results17$prediction > 0.6,1,0)
+
+roundedresults17<-sapply(results17,round,digits=0)
+roundedresults17df=data.frame(roundedresults17)
+attach(roundedresults17df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN17
+
+sensitivity = (200 / (200+14))* 100
+print(sensitivity)
+specificity = (180 / (3+180))* 100
+print(specificity)
+Accuracy = ((200+180)/(3+14+180+200))*100
+print(Accuracy)
+```
+#Fitting NN18
+```{r}
+nn18 <- keras_model_sequential()
+nn18 %>%
+  layer_dense(units = 100, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 50, activation = 'relu')%>%
+  layer_dense(units = 30, activation = 'relu')%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn18 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn18 <- nn18 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=50,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn18 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn18 %>% predict(test_matrix_final)
+results18 <- tibble(actual= testtarget, prediction= pred)
+results18$prediction <- ifelse(results18$prediction > 0.6,1,0)
+
+roundedresults18<-sapply(results18,round,digits=0)
+roundedresults18df=data.frame(roundedresults18)
+attach(roundedresults18df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN18
+sensitivity = (198 / (198+16))* 100
+print(sensitivity)
+specificity = (180 / (3+180))* 100
+print(specificity)
+Accuracy = ((198+180)/(3+16+180+198))*100
+print(Accuracy)
+```
+#Fitting NN19
+```{r}
+nn19 <- keras_model_sequential()
+nn19 %>%
+  layer_dense(units = 20, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 14, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn19 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn19 <- nn19 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=75,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn19 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn19 %>% predict(test_matrix_final)
+results19 <- tibble(actual= testtarget, prediction= pred)
+results19$prediction <- ifelse(results19$prediction > 0.6,1,0)
+
+roundedresults19<-sapply(results19,round,digits=0)
+roundedresults19df=data.frame(roundedresults19)
+attach(roundedresults19df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN19
+
+sensitivity = (197 / (197+17))* 100
+print(sensitivity)
+specificity = (179 / (4+179))* 100
+print(specificity)
+Accuracy = ((197+179)/(4+17+179+197))*100
+print(Accuracy)
+```
+#Fitting NN20
+```{r}
+nn20 <- keras_model_sequential()
+nn20 %>%
+  layer_dense(units = 15, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn20 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn20 <- nn20 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=75,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn20 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn20 %>% predict(test_matrix_final)
+results20 <- tibble(actual= testtarget, prediction= pred)
+results20$prediction <- ifelse(results20$prediction > 0.6,1,0)
+
+roundedresults20<-sapply(results20,round,digits=0)
+roundedresults20df=data.frame(roundedresults20)
+attach(roundedresults20df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN20
+
+sensitivity = (194 / (194+20))* 100
+print(sensitivity)
+specificity = (179 / (4+179))* 100
+print(specificity)
+Accuracy = ((194+179)/(4+20+179+194))*100
+print(Accuracy)
+```
+#Fitting NN21
+```{r}
+nn21 <- keras_model_sequential()
+nn21 %>%
+  layer_dense(units = 6, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 3, activation = 'relu')%>%
+  layer_dense(units = 3, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn21 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn21 <- nn21 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=30,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn21 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn21 %>% predict(test_matrix_final)
+results21 <- tibble(actual= testtarget, prediction= pred)
+results21$prediction <- ifelse(results21$prediction > 0.6,1,0)
+
+roundedresults21<-sapply(results21,round,digits=0)
+roundedresults21df=data.frame(roundedresults21)
+attach(roundedresults21df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN21
+
+sensitivity = (194 / (194+20))* 100
+print(sensitivity)
+specificity = (181 / (2+181))* 100
+print(specificity)
+Accuracy = ((194+181)/(2+20+181+194))*100
+print(Accuracy)
+```
+#Fitting NN22
+```{r}
+nn22 <- keras_model_sequential()
+nn22 %>%
+  layer_dense(units = 6, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 3, activation = 'relu')%>%
+  layer_dense(units = 3, activation = 'relu')%>%
+  layer_dense(units = 3, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn22 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn22 <- nn22 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=75,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn22 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn22 %>% predict(test_matrix_final)
+results22 <- tibble(actual= testtarget, prediction= pred)
+results22$prediction <- ifelse(results22$prediction > 0.6,1,0)
+
+roundedresults22<-sapply(results22,round,digits=0)
+roundedresults22df=data.frame(roundedresults22)
+attach(roundedresults22df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN22
+
+sensitivity = (192 / (192+22))* 100
+print(sensitivity)
+specificity = (180 / (3+180))* 100
+print(specificity)
+Accuracy = ((192+180)/(3+22+180+192))*100
+print(Accuracy)
+```
+#Fitting NN23
+```{r}
+nn23 <- keras_model_sequential()
+nn23 %>%
+  layer_dense(units = 8, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 4, activation = 'relu')%>%
+  layer_dense(units = 4, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn23 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn23 <- nn23 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=75,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn23 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn23 %>% predict(test_matrix_final)
+results23 <- tibble(actual= testtarget, prediction= pred)
+results23$prediction <- ifelse(results23$prediction > 0.6,1,0)
+
+roundedresults23<-sapply(results23,round,digits=0)
+roundedresults23df=data.frame(roundedresults23)
+attach(roundedresults23df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN23
+
+sensitivity = (196 / (196+18))* 100
+print(sensitivity)
+specificity = (176 / (7+176))* 100
+print(specificity)
+Accuracy = ((196+176)/(7+18+176+196))*100
+print(Accuracy)
+```
+#Fitting NN24
+```{r}
+nn24 <- keras_model_sequential()
+nn24 %>%
+  layer_dense(units = 4, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 2, activation = 'relu')%>%
+  layer_dense(units = 2, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn24 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn24 <- nn24 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=45,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn24 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn24 %>% predict(test_matrix_final)
+results24 <- tibble(actual= testtarget, prediction= pred)
+results24$prediction <- ifelse(results24$prediction > 0.6,1,0)
+
+roundedresults24<-sapply(results24,round,digits=0)
+roundedresults24df=data.frame(roundedresults24)
+attach(roundedresults24df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN24
+
+sensitivity = (191 / (191+23))* 100
+print(sensitivity)
+specificity = (182 / (1+182))* 100
+print(specificity)
+Accuracy = ((191+182)/(1+23+182+191))*100
+print(Accuracy)
+```
+#Fitting NN25
+```{r}
+nn25 <- keras_model_sequential()
+nn25 %>%
+  layer_dense(units = 7, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 3, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn25 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn25 <- nn25 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=75,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn25 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn25 %>% predict(test_matrix_final)
+results25 <- tibble(actual= testtarget, prediction= pred)
+results25$prediction <- ifelse(results26$prediction > 0.6,1,0)
+
+roundedresults25<-sapply(results25,round,digits=0)
+roundedresults25df=data.frame(roundedresults25)
+attach(roundedresults25df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN25
+
+sensitivity = (190 / (190+24))* 100
+print(sensitivity)
+specificity = (180 / (3+180))* 100
+print(specificity)
+Accuracy = ((190+180)/(3+24+180+190))*100
+print(Accuracy)
+```
+#Fitting NN26
+```{r}
+nn26 <- keras_model_sequential()
+nn26 %>%
+  layer_dense(units = 7, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 5, activation = 'relu')%>%
+  layer_dense(units = 3, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn26 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn26 <- nn26 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=75,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn26 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn26 %>% predict(test_matrix_final)
+results26 <- tibble(actual= testtarget, prediction= pred)
+results26$prediction <- ifelse(results26$prediction > 0.6,1,0)
+
+roundedresults26<-sapply(results26,round,digits=0)
+roundedresults26df=data.frame(roundedresults26)
+attach(roundedresults26df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN26
+
+sensitivity = (192 / (192+22))* 100
+print(sensitivity)
+specificity = (181 / (2+181))* 100
+print(specificity)
+Accuracy = ((192+181)/(2+22+181+192))*100
+print(Accuracy)
+```
+#Fitting NN27
+```{r}
+nn27 <- keras_model_sequential()
+nn27 %>%
+  layer_dense(units = 6, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 4, activation = 'relu')%>%
+  layer_dense(units = 3, activation = 'relu')%>%
+  layer_dense(units = 3, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn27 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn27 <- nn27 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=40,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn27 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn27 %>% predict(test_matrix_final)
+results27 <- tibble(actual= testtarget, prediction= pred)
+results27$prediction <- ifelse(results27$prediction > 0.6,1,0)
+
+roundedresults27<-sapply(results27,round,digits=0)
+roundedresults27df=data.frame(roundedresults27)
+attach(roundedresults27df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN27
+
+sensitivity = (190 / (190+24))* 100
+print(sensitivity)
+specificity = (181 / (2+181))* 100
+print(specificity)
+Accuracy = ((190+181)/(2+24+181+190))*100
+print(Accuracy)
+```
+#Fitting NN28
+```{r}
+nn28 <- keras_model_sequential()
+nn28 %>%
+  layer_dense(units = 10, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 10, activation = 'relu')%>%
+  layer_dense(units = 3, activation = 'relu')%>%
+  layer_dense(units = 3, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn28 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn28 <- nn28 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=50,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn28 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn28 %>% predict(test_matrix_final)
+results28 <- tibble(actual= testtarget, prediction= pred)
+results28$prediction <- ifelse(results28$prediction > 0.6,1,0)
+
+roundedresults28<-sapply(results28,round,digits=0)
+roundedresults28df=data.frame(roundedresults28)
+attach(roundedresults28df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN28
+
+sensitivity = (194 / (194+20))* 100
+print(sensitivity)
+specificity = (180 / (3+180))* 100
+print(specificity)
+Accuracy = ((194+180)/(3+20+180+194))*100
+print(Accuracy)
+```
+#Fitting NN29
+```{r}
+nn29 <- keras_model_sequential()
+nn29 %>%
+  layer_dense(units = 5, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 3, activation = 'relu')%>%
+  layer_dense(units = 2, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn29 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn29 <- nn29 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=75,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn29 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn29 %>% predict(test_matrix_final)
+results29 <- tibble(actual= testtarget, prediction= pred)
+results29$prediction <- ifelse(results29$prediction > 0.6,1,0)
+
+roundedresults29<-sapply(results29,round,digits=0)
+roundedresults29df=data.frame(roundedresults29)
+attach(roundedresults29df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN29
+
+sensitivity = (192 / (192+22))* 100
+print(sensitivity)
+specificity = (180 / (3+180))* 100
+print(specificity)
+Accuracy = ((192+180)/(3+22+180+192))*100
+print(Accuracy)
+```
+#Fitting NN30
+```{r}
+nn30 <- keras_model_sequential()
+nn30 %>%
+  layer_dense(units = 8, activation = 'relu', input_shape = 5)%>%
+  layer_dense(units = 6, activation = 'relu')%>%
+  layer_dense(units = 4, activation = 'relu')%>%
+  layer_dense(units = 4, activation = 'relu')%>%
+  layer_dense(units = 1, activation = 'sigmoid')
+
+nn30 %>% compile(loss = 'mse', optimizer = 'rmsprop', metrics = 'accuracy')
+
+my_nn30 <- nn30 %>%
+  fit(train_matrix_final,
+      traintarget,
+      epochs=50,
+      batch_size = 32,
+      validation_split = 0.2,
+      )
+
+nn30 %>% evaluate(test_matrix_final, testtarget)
+pred <- nn30 %>% predict(test_matrix_final)
+results30 <- tibble(actual= testtarget, prediction= pred)
+results30$prediction <- ifelse(results30$prediction > 0.6,1,0)
+
+roundedresults30<-sapply(results30,round,digits=0)
+roundedresults30df=data.frame(roundedresults30)
+attach(roundedresults30df)
+table(actual,prediction)
+
+#Sensitivity, specificity and accuracy for NN30
+
+sensitivity = (194 / (195+20))* 100
+print(sensitivity)
+specificity = (183 / (0+183))* 100
+print(specificity)
+Accuracy = ((194+183)/(0+20+183+194))*100
+print(Accuracy)
+```
